@@ -2,9 +2,12 @@
 
 struct Particle
 {
-	vec2 pos;
-	vec2 vel;
+	vec4 pos;
+	vec4 vel;
+	vec4 startvel;
 	vec4 gradientPos;
+	vec4 lifeTimer;
+	vec4 rootPos;
 };
 
 // Binding 0 : Position storage buffer
@@ -13,11 +16,12 @@ layout(std140, binding = 0) buffer Pos
    Particle particles[ ];
 };
 
-layout (local_size_x = 256) in;
+layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
 layout (binding = 1) uniform UBO 
 {
 	float deltaT;
+	float time;
 	float destX;
 	float destY;
 	int particleCount;
@@ -39,37 +43,73 @@ vec2 repulsion(vec2 pos, vec2 attractPos)
 	float targetDistance = sqrt(dot(delta, delta));
 	return delta * (1.0 / (targetDistance * targetDistance * targetDistance)) * -0.000035;
 }
-
+float rand(vec2 co){
+    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+}
 void main() 
 {
+
     // Current SSBO index
-    uint index = gl_GlobalInvocationID.x;
+    uint index = 1024 * gl_GlobalInvocationID.y + gl_GlobalInvocationID.x;
+	index =  gl_GlobalInvocationID.x;
 	// Don't try to write beyond particle count
-    if (index >= ubo.particleCount) 
-		return;	
+    //if (index >= ubo.particleCount) 
+		//return;	
 
     // Read position and velocity
-    vec2 vVel = particles[index].vel.xy;
-    vec2 vPos = particles[index].pos.xy;
+    vec3 vVel = particles[index].vel.xyz;
+    vec3 vPos = particles[index].pos.xyz;
 
-    vec2 destPos = vec2(ubo.destX, ubo.destY);
+	//Explosion
+	if(ubo.time > 2)
+	{
+		vec3 delta = vPos + (vVel*ubo.deltaT/100);
+		particles[index].pos.xyz = delta;
+		particles[index].vel.xyz *= 0.98;
+		
+		if(ubo.time > 1)
+			particles[index].vel.xyz -= vec3(0, 3.9, 0);
+		
+		particles[index].lifeTimer.x += ubo.deltaT;
+		if(particles[index].lifeTimer.x > particles[index].lifeTimer.y)
+		{
+			particles[index].pos = vec4(1000, 0, 0, 0);
+			particles[index].lifeTimer.x = 0;
+		}
+	}
+	else if(ubo.time > 1.975)
+	{
+		particles[index].lifeTimer.x = 0;
+		particles[index].lifeTimer.y = particles[index].lifeTimer.y*1.5;
+		particles[index].vel = particles[index].startvel;
+		particles[index].pos = particles[index].rootPos;
+	}
 
-    vec2 delta = destPos - vPos;
-    float targetDistance = sqrt(dot(delta, delta));
-    vVel += repulsion(vPos, destPos.xy) * 0.05;
+	
+	//Trail
+	vVel = vec3(particles[index].lifeTimer.z, -abs(particles[index].vel.y), particles[index].lifeTimer.a);
+	if(ubo.time > 0.025 && ubo.time < 1.95)
+	{
+		particles[index].rootPos.xyz += vec3(0,2,0)*ubo.deltaT;
+		vec3 delta = vPos + (vVel*ubo.deltaT/100);
+		particles[index].pos.xyz = delta;
+		//particles[index].vel.xyz *= 0.98;
+		
+		//if(ubo.time > 1)
+			//particles[index].vel.xyz -= vec3(0, 3.9, 0);
+		
+		particles[index].lifeTimer.x += ubo.deltaT;
+		if(particles[index].lifeTimer.x > particles[index].lifeTimer.y)
+		{
+			particles[index].pos = particles[index].rootPos;
+			particles[index].lifeTimer.x = 0;
+		}
+	}
+	else if(ubo.time < 0.025)
+	{
+		particles[index].rootPos = vec4(0, -5, 0, 0);
+	}
 
-    // Move by velocity
-    vPos += vVel * ubo.deltaT;
+	//particles[index].pos = vec4(0, 2.5, 0, 0);
 
-    // collide with boundary
-    if ((vPos.x < -1.0) || (vPos.x > 1.0) || (vPos.y < -1.0) || (vPos.y > 1.0))
-    	vVel = (-vVel * 0.1) + attraction(vPos, destPos) * 12;
-    else
-    	particles[index].pos.xy = vPos;
-
-    // Write back
-    particles[index].vel.xy = vVel;
-	particles[index].gradientPos.x += 0.02 * ubo.deltaT;
-	if (particles[index].gradientPos.x > 1.0)
-		particles[index].gradientPos.x -= 1.0;
 }

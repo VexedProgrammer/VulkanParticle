@@ -28,7 +28,7 @@
 #include "VulkanObject.h"
 #include "VulkanEngine.h"
 
-#define PARTICLE_COUNT 256 * 1024
+#define PARTICLE_COUNT 1*500//1 * 1024
 
 /*! Uniform Buffer Object struct
 	Holds the model, view and projection matrix
@@ -37,13 +37,14 @@ struct UniformBufferObject {
 	glm::mat4 model;
 	glm::mat4 view;
 	glm::mat4 proj;
-	glm::mat4 lightRot;
-	glm::mat4 lightSpace;
 };
 struct Particle {
-	glm::vec2 pos;								// Particle position
-	glm::vec2 vel;								// Particle velocity
+	glm::vec4 pos;								// Particle position
+	glm::vec4 startvel;							// Particle Start Velocity
+	glm::vec4 vel;								// Particle velocity
 	glm::vec4 gradientPos;						// Texture coordiantes for the gradient ramp map
+	glm::vec4 lifeTimer = glm::vec4(0);
+	glm::vec4 rootPos;
 };
 /*! Vulkan App
 	Handling all vulkan code for displaying a simple pyrimid 
@@ -72,6 +73,7 @@ class VulkanApp {
 		VkPipeline pipeline;						// Compute pipeline for updating particle positions
 		struct computeUBO {							// Compute shader uniform block object
 			float deltaT;							//		Frame delta time
+			float time;								//		Frame time
 			float destX;							//		x position of the attractor
 			float destY;							//		y position of the attractor
 			int32_t particleCount = PARTICLE_COUNT;
@@ -305,6 +307,7 @@ private:
 	VkSampler gTextureSampler;
 	VkDescriptorImageInfo gDescriptor;
 
-	float frameTimer = 1.0f;
+	float frameTimer = 0.01f;
 	float timer = 0.0f;
+	float theta = 0;
 };

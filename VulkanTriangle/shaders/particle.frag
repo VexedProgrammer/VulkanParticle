@@ -12,4 +12,6 @@ void main ()
 {
 	vec3 color = texture(samplerGradientRamp, vec2(inGradientPos, 0.0)).rgb;
 	outFragColor.rgb = texture(samplerColorMap, gl_PointCoord).rgb * color;
+	outFragColor.a = texture(samplerColorMap, gl_PointCoord).a;
+	//outFragColor = vec4(0,1,1,texture(samplerColorMap, gl_PointCoord).a);
 }

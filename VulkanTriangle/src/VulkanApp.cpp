@@ -98,7 +98,7 @@ const void VulkanApp::createInstance()
 	//Set up app info, this is optional but useful
 	VkApplicationInfo appInfo = {};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	appInfo.pApplicationName = "Hello Pyramid";
+	appInfo.pApplicationName = "Hello FireWork";
 	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 	appInfo.pEngineName = "No Engine";
 	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -219,7 +219,7 @@ void VulkanApp::drawFrame() {
 
 	vkQueueSubmit(compute.queue, 1, &computeSubmitInfo, compute.fence);
 
-
+	updateUniformBuffer(0, 0);
 	//Wait for current frame to be processed before drawing a new one (stop memory leak)
 	//vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, std::numeric_limits<uint64_t>::max());
 
@@ -869,23 +869,23 @@ void VulkanApp::createGraphicsPipeline() {
 
 	VkPipelineDepthStencilStateCreateInfo depthStencil = {};
 	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-	depthStencil.depthTestEnable = VK_TRUE;
-	depthStencil.depthWriteEnable = VK_TRUE;
+	depthStencil.depthTestEnable = VK_FALSE;
+	depthStencil.depthWriteEnable = VK_FALSE;
 	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
 	depthStencil.stencilTestEnable = VK_FALSE;
-	depthStencil.minDepthBounds = 0.0f; // Optional
-	depthStencil.maxDepthBounds = 1.0f; // Optional
+	//depthStencil.minDepthBounds = 0.0f; // Optional
+	//depthStencil.maxDepthBounds = 1.0f; // Optional
 
 	//Set up colour blending settings (Default blending settings)
 	VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
-	colorBlendAttachment.colorWriteMask = 0xF;
+	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 	colorBlendAttachment.blendEnable = VK_TRUE;
-	colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-	colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 	colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-	colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-	colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_DST_ALPHA;
+	colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
 	colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
 
 	VkPipelineColorBlendStateCreateInfo colorBlending = {};
@@ -1294,6 +1294,13 @@ void VulkanApp::createDescriptorSetLayout()
 	depthSamplerLayoutBinding.pImmutableSamplers = nullptr;
 	depthSamplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;*/
 	
+
+	VkDescriptorSetLayoutBinding uboLayoutBinding = {};
+	uboLayoutBinding.binding = 2;
+	uboLayoutBinding.descriptorCount = 1;
+	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uboLayoutBinding.pImmutableSamplers = nullptr;
+	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 	VkDescriptorSetLayoutBinding colour = {};
 	colour.binding = 0;
 	colour.descriptorCount = 1;
@@ -1308,7 +1315,7 @@ void VulkanApp::createDescriptorSetLayout()
 	gradient.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	//std::array<VkDescriptorSetLayoutBinding, 3> bindings = { uboLayoutBinding, samplerLayoutBinding, depthSamplerLayoutBinding };// guboLayoutBinding
-	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { colour, gradient };
+	std::array<VkDescriptorSetLayoutBinding, 3> bindings = { uboLayoutBinding, colour, gradient };
 	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
@@ -1332,11 +1339,11 @@ void VulkanApp::createUniformBuffers()
 	}*/
 
 	//Allocate memory
-	uniformBuffers.resize(size);
-	uniformBuffersMemory.resize(size);
+	uniformBuffers.resize(1);
+	uniformBuffersMemory.resize(1);
 
 	//Create a uniform buffer for each of the swap chain images
-	for (size_t i = 0; i < size; i++) {
+	for (size_t i = 0; i < 1; i++) {
 		m_Engine->createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i], nullptr);
 	}
 
@@ -1345,48 +1352,29 @@ void VulkanApp::createUniformBuffers()
 
 void VulkanApp::updateUniformBuffer(uint32_t currentImage, unsigned int objectIndex)
 {
-	//unsigned int index = m_Objects.size() * currentImage + objectIndex;
-
-	////Time at start of frame
-	//static auto startTime = std::chrono::high_resolution_clock::now();
-
-	////Current time
-	//auto currentTime = std::chrono::high_resolution_clock::now();
-	////Delta Time
-	//float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-
-	//glm::vec3 lightPos = glm::vec3(0.13f, 0.015f, 0.0f) * glm::mat3(glm::rotate(time * glm::radians(45.0f), glm::vec3(0, 1, 0)));
-
-
-	//// Matrix from light's point of view
-	//glm::mat4 depthProjectionMatrix = glm::perspective(glm::radians(65.0f), 1.0f / 1.0f, 0.01f, 150.0f);
-	//depthProjectionMatrix[1][1] *= -1;
-	//glm::mat4 depthViewMatrix = glm::lookAt(lightPos, glm::vec3(0.0f, -0.01f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-	//glm::mat4 depthModelMatrix = glm::mat4(1); 
-	//depthModelMatrix = glm::translate(glm::mat4(1.0f), m_Objects[objectIndex]->GetPos()) * glm::rotate(depthModelMatrix, time * glm::radians(m_Objects[objectIndex]->GetRot().y), glm::vec3(0, 1, 0)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.05f, 0.05f, 0.05f));
-
-	////Set up the uniform model matrix (rotation and translation and scale)
-	//UniformBufferObject ubo = {};
-	////glm::mat4 model = glm::translate(glm::mat4(1.0f), m_Objects[objectIndex]->GetPos()) * glm::rotate(ubo.model, time * glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(10.0f, 10.0f, 10.0f));
-	//ubo.model = glm::mat4(1);
-	//ubo.model = glm::translate(glm::mat4(1.0f), m_Objects[objectIndex]->GetPos()) * glm::rotate(ubo.model, time * glm::radians(m_Objects[objectIndex]->GetRot().y), glm::vec3(0, 1, 0)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.05f, 0.05f, 0.05f));
-	//
-	//
-	////View matrix using look at
-	//ubo.view =  glm::lookAt(glm::vec3(0.0f, 0.05f, 0.1f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-	////Projection / Perspective matrix
-	//glm::mat4 proj = glm::perspective(glm::radians(67.0f), (float)swapChainExtent.width / (float)swapChainExtent.height, 0.01f, 100.0f);
-	//proj[1][1] *= -1;
-	//ubo.proj = proj;
-	//ubo.lightRot = glm::rotate(glm::mat4(1), time * glm::radians(45.0f), glm::vec3(0, 1, 0));
-	//ubo.lightSpace = depthProjectionMatrix * depthViewMatrix * depthModelMatrix;
-	////Map memory to a CPU side pointer, copy over data then unmap from cpu side
-	//
-	//void* data;
-	//vkMapMemory(device, uniformBuffersMemory[index], 0, sizeof(ubo), 0, &data);
-	//memcpy(data, &ubo, sizeof(ubo));
-	//vkUnmapMemory(device, uniformBuffersMemory[index]);
+	float x = 1;
+	float y = 0;
+	//theta += 1 * frameTimer;
+	float x_rotated = ((x - 0) * cos(theta)) - ((0 - y) * sin(theta)) + 0;
+	float y_rotated = ((0 - y) * cos(theta)) - ((x - 0) * sin(theta)) + 0;
+	//Set up the uniform model matrix (rotation and translation and scale)
+	UniformBufferObject ubo = {};
+	ubo.model = glm::identity<glm::mat4>();
+	//ubo.model = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, 0)) * glm::rotate(ubo.model, glm::radians(0.0f), glm::vec3(0, 1, 0)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.05f, 0.05f, 0.05f));
+	
+	
+	//View matrix using look at
+	ubo.view =  glm::lookAt(glm::vec3(x_rotated, 0.1f, 15), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	//Projection / Perspective matrix
+	glm::mat4 proj = glm::perspective(glm::radians(67.0f), (float)swapChainExtent.width / (float)swapChainExtent.height, 0.01f, 100.0f);
+	proj[1][1] *= -1;
+	ubo.proj = proj;
+	//Map memory to a CPU side pointer, copy over data then unmap from cpu side
+	
+	void* data;
+	vkMapMemory(device, uniformBuffersMemory[0], 0, sizeof(ubo), 0, &data);
+	memcpy(data, &ubo, sizeof(ubo));
+	vkUnmapMemory(device, uniformBuffersMemory[0]);
 }
 
 void VulkanApp::createDescriptorPool()
@@ -1407,11 +1395,11 @@ void VulkanApp::createDescriptorPool()
 
 	std::array<VkDescriptorPoolSize, 3> poolSizes = {};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = static_cast<uint32_t>(1);
+	poolSizes[0].descriptorCount = static_cast<uint32_t>(2);
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	poolSizes[1].descriptorCount = static_cast<uint32_t>(2);
 	poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	poolSizes[2].descriptorCount = static_cast<uint32_t>(2);
+	poolSizes[2].descriptorCount = static_cast<uint32_t>(1);
 
 
 	VkDescriptorPoolCreateInfo poolInfo = {};
@@ -1456,74 +1444,21 @@ void VulkanApp::createDescriptorSets()
 	writeDescriptorSetTwo.pImageInfo = &gDescriptor;
 	writeDescriptorSetTwo.descriptorCount = 1;
 	writeDescriptorSets.push_back(writeDescriptorSetTwo);
+	// Binding : UBO
+	VkDescriptorBufferInfo bufferInfo = {};
+	bufferInfo.buffer = uniformBuffers[0]; //Actual buffer to use
+	bufferInfo.offset = 0; //Start at the start
+	bufferInfo.range = sizeof(UniformBufferObject); //Size of each buffer
+	VkWriteDescriptorSet writeDescriptorSetUBO{};
+	writeDescriptorSetUBO.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writeDescriptorSetUBO.dstSet = descriptorSets[0];
+	writeDescriptorSetUBO.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	writeDescriptorSetUBO.dstBinding = 2;
+	writeDescriptorSetUBO.pBufferInfo = &bufferInfo;
+	writeDescriptorSetUBO.descriptorCount = 1;
+	writeDescriptorSets.push_back(writeDescriptorSetUBO);
 
 	vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
-
-	//unsigned int size = 0;
-	//for (unsigned int i = 0; i < m_Objects.size(); i++)
-	//{
-	//	size += swapChainImages.size();
-	//}
-
-	////Allocate memory
-	//std::vector<VkDescriptorSetLayout> layouts(size, descriptorSetLayout);
-	//VkDescriptorSetAllocateInfo allocInfo = {};
-	//allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	//allocInfo.descriptorPool = descriptorPool; //Pass in the pool
-	//allocInfo.descriptorSetCount = static_cast<uint32_t>(layouts.size()); //Same as pool descriptor count
-	//allocInfo.pSetLayouts = layouts.data(); //Pass in layout data
-
-	//
-	//
-	//
-	////Allocate memory
-	//descriptorSets.resize(size);
-	////Allocate desciptor sets 
-	//if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
-	//	throw std::runtime_error("failed to allocate descriptor sets!");
-	//}
-	////For each swap chain image set up and pass in the descriptor set and buffer for each image
-	//for (size_t i = 0; i < swapChainImages.size(); i++) {
-	//	for (unsigned int j = 0; j < m_Objects.size(); j++)
-	//	{
-	//		unsigned int index = m_Objects.size() * i + j;
-	//			
-	//		VkDescriptorBufferInfo bufferInfo = {};
-	//		bufferInfo.buffer = uniformBuffers[index]; //Actual buffer to use
-	//		bufferInfo.offset = 0; //Start at the start
-	//		bufferInfo.range = sizeof(UniformBufferObject); //Size of each buffer
-
-	//		VkDescriptorImageInfo imageInfo = {};
-	//		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	//	
-	//		//std::cout << index << std::endl;
-	//		imageInfo.imageView = m_Objects[j]->GetTextureImageView();
-	//		imageInfo.sampler = m_Objects[j]->GetTextureSampler();
-
-	//		//Pass uniform buffer at binding 0
-	//		std::array<VkWriteDescriptorSet, 2> descriptorWrites = {};
-	//		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	//		descriptorWrites[0].dstSet = descriptorSets[index]; //desciptor to use
-	//		descriptorWrites[0].dstBinding = 0;
-	//		descriptorWrites[0].dstArrayElement = 0;
-	//		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	//		descriptorWrites[0].descriptorCount = 1;
-	//		descriptorWrites[0].pBufferInfo = &bufferInfo;
-	//			
-	//		//Pass uniform sampler at binding 1
-	//		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	//		descriptorWrites[1].dstSet = descriptorSets[index];
-	//		descriptorWrites[1].dstBinding = 1;
-	//		descriptorWrites[1].dstArrayElement = 0;
-	//		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	//		descriptorWrites[1].descriptorCount = 1;
-	//		descriptorWrites[1].pImageInfo = &imageInfo;
-
-	//		//Set the descriptor set for this image
-	//		vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
-	//		
-	//	}
-	//}
 }
 
 void VulkanApp::createDepthResources()
@@ -1565,14 +1500,23 @@ VkFormat VulkanApp::findDepthFormat()
 void VulkanApp::prepareStorageBuffers()
 {
 	std::default_random_engine rndEngine(true ? 0 : (unsigned)time(nullptr));
-	std::uniform_real_distribution<float> rndDist(-1.0f, 1.0f);
-
+	std::uniform_real_distribution<float> rndDist(-0.001f, 0.001f);
+	std::uniform_real_distribution<float> rndDist01(0.2f, 1.0f);
+	std::uniform_real_distribution<float> rndDist10(-30.0f, 30.0f);
+	
 	// Initial particle positions
 	std::vector<Particle> particleBuffer(PARTICLE_COUNT);
 	for (auto& particle : particleBuffer) {
-		particle.pos = glm::vec2(rndDist(rndEngine), rndDist(rndEngine));
-		particle.vel = glm::vec2(0.0f);
-		particle.gradientPos.x = particle.pos.x / 2.0f;
+		float r = rndDist01(rndEngine);
+		float r10 = rndDist10(rndEngine);
+		particle.pos =  glm::vec4(0, 15, 0, 0);
+		particle.vel = glm::normalize(glm::vec4(rndDist(rndEngine), rndDist(rndEngine), rndDist(rndEngine), 0))*(400*r);
+		particle.startvel = particle.vel;
+		particle.gradientPos.x = r;
+		particle.lifeTimer.y = r*1.5f;
+		particle.lifeTimer.z = r10;
+		particle.lifeTimer.a = r10;
+		particle.rootPos = glm::vec4(0, -5, 0, 0);
 	}
 
 	VkDeviceSize storageBufferSize = particleBuffer.size() * sizeof(Particle);
@@ -1647,7 +1591,7 @@ void VulkanApp::prepareStorageBuffers()
 	VkVertexInputAttributeDescription vInputAttribDescription{};
 	vInputAttribDescription.location = 0;
 	vInputAttribDescription.binding = 0;
-	vInputAttribDescription.format = VK_FORMAT_R32G32_SFLOAT;
+	vInputAttribDescription.format = VK_FORMAT_R32G32B32_SFLOAT;
 	vInputAttribDescription.offset = offsetof(Particle, pos);
 	vertices.attributeDescriptions[0] = vInputAttribDescription;
 	
@@ -1864,7 +1808,7 @@ void VulkanApp::buildComputeCommandBuffer()
 	vkCmdBindDescriptorSets(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelineLayout, 0, 1, &compute.descriptorSet, 0, 0);
 
 	// Dispatch the compute job
-	vkCmdDispatch(compute.commandBuffer, PARTICLE_COUNT / 256, 1, 1);
+	vkCmdDispatch(compute.commandBuffer, (PARTICLE_COUNT / 256), 1, 1);
 
 	// Add memory barrier to ensure that compute shader has finished writing to the buffer
 	// Without this the (rendering) vertex shader may display incomplete results (partial data from last frame) 
@@ -1892,10 +1836,11 @@ void VulkanApp::buildComputeCommandBuffer()
 void VulkanApp::UpdateComputeUniform()
 {
 	timer += frameTimer;
-	if (timer > 1.0f) timer = 0.0f;
+	if (timer > 10.0f) timer = 0.0f;
 	compute.ubo.deltaT = frameTimer * 2.5f;
 	compute.ubo.destX = sin(glm::radians(timer * 360.0f)) * 0.75f;
 	compute.ubo.destY = 0.0f;
+	compute.ubo.time = timer;
 
 	void* data;
 	vkMapMemory(device, compute.uniformMemory, 0, sizeof(compute.ubo), 0, &data);
