@@ -28,7 +28,7 @@
 #include "VulkanObject.h"
 #include "VulkanEngine.h"
 
-#define PARTICLE_COUNT 1*500//1 * 1024
+#define PARTICLE_COUNT 16*512//1 * 1024
 
 /*! Uniform Buffer Object struct
 	Holds the model, view and projection matrix
@@ -40,11 +40,42 @@ struct UniformBufferObject {
 };
 struct Particle {
 	glm::vec4 pos;								// Particle position
+	glm::vec4 startpos;							// Particle start position
 	glm::vec4 startvel;							// Particle Start Velocity
 	glm::vec4 vel;								// Particle velocity
 	glm::vec4 gradientPos;						// Texture coordiantes for the gradient ramp map
 	glm::vec4 lifeTimer = glm::vec4(0);
 	glm::vec4 rootPos;
+	
+};
+enum FireWork
+{
+	Peony,
+	Fountain,
+	Catherine,
+	Roman,
+	Flat
+};
+struct ParticleSystem
+{
+	FireWork type;
+	unsigned int id;
+	glm::vec3 position;
+	float particleLife;
+	unsigned int particleCount;
+	float startDelay;
+	float endTime;
+
+	ParticleSystem(FireWork type, unsigned int id, glm::vec3 position, float life, unsigned int particleCount, float delay, float endTime)
+	{
+		this->type = type;
+		this->id = id;
+		this->position = position;
+		this->particleLife = life;
+		this->particleCount = particleCount;
+		this->startDelay = delay;
+		this->endTime = endTime;
+	}
 };
 /*! Vulkan App
 	Handling all vulkan code for displaying a simple pyrimid 
@@ -55,27 +86,29 @@ class VulkanApp {
 		VkDeviceMemory mem;
 		VkImageView view;
 	};
-	// Resources for the compute part of the example
+	// Resources for the compute pipeline
 	struct {
-		VkBuffer storageBuffer;					// (Shader) storage buffer object containing the particles
+		VkBuffer storageBuffer;					//Storage buffer object containing the particles
 		VkDeviceMemory storageMemory;
 		VkDescriptorBufferInfo storageDesc;
-		VkBuffer uniformBuffer;					// Uniform buffer object containing particle system parameters
+		VkBuffer uniformBuffer;					//Uniform buffer object containing compute UBO
 		VkDeviceMemory uniformMemory;
+		///
+		/// Everything else for a standard pipeline set up
+		///
 		VkDescriptorBufferInfo uniformDesc;
-		VkQueue queue;								// Separate queue for compute commands (queue family may differ from the one used for graphics)
-		VkCommandPool commandPool;					// Use a separate command pool (queue family may differ from the one used for graphics)
-		VkCommandBuffer commandBuffer;				// Command buffer storing the dispatch commands and barriers
-		VkFence fence;								// Synchronization fence to avoid rewriting compute CB if still in use
-		VkDescriptorSetLayout descriptorSetLayout;	// Compute shader binding layout
-		VkDescriptorSet descriptorSet;				// Compute shader bindings
-		VkPipelineLayout pipelineLayout;			// Layout of the compute pipeline
-		VkPipeline pipeline;						// Compute pipeline for updating particle positions
-		struct computeUBO {							// Compute shader uniform block object
-			float deltaT;							//		Frame delta time
-			float time;								//		Frame time
-			float destX;							//		x position of the attractor
-			float destY;							//		y position of the attractor
+		VkQueue queue;								
+		VkCommandPool commandPool;					
+		VkCommandBuffer commandBuffer;				
+		VkFence fence;								
+		VkDescriptorSetLayout descriptorSetLayout;	
+		VkDescriptorSet descriptorSet;				
+		VkPipelineLayout pipelineLayout;			
+		VkPipeline pipeline;						
+		struct computeUBO {							
+			float deltaT;							
+			float time;								
+			float pulseTime;						
 			int32_t particleCount = PARTICLE_COUNT;
 		} ubo;
 	} compute;
@@ -310,4 +343,9 @@ private:
 	float frameTimer = 0.01f;
 	float timer = 0.0f;
 	float theta = 0;
+
+	float pulseTimer = 0.0f;
+
+	std::vector<ParticleSystem> m_ParticleSystems; //The systems for each effect
+	glm::vec3 cameraPos = glm::vec3(15, 0.1f, 0); //Start position of the camera
 };

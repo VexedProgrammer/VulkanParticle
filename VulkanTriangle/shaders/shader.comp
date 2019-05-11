@@ -3,6 +3,7 @@
 struct Particle
 {
 	vec4 pos;
+	vec4 startpos;
 	vec4 vel;
 	vec4 startvel;
 	vec4 gradientPos;
@@ -22,8 +23,7 @@ layout (binding = 1) uniform UBO
 {
 	float deltaT;
 	float time;
-	float destX;
-	float destY;
+	float pulseTime;
 	int particleCount;
 } ubo;
 
@@ -43,60 +43,46 @@ vec2 repulsion(vec2 pos, vec2 attractPos)
 	float targetDistance = sqrt(dot(delta, delta));
 	return delta * (1.0 / (targetDistance * targetDistance * targetDistance)) * -0.000035;
 }
-float rand(vec2 co){
-    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
-}
-void main() 
+
+void Peony(uint index)
 {
-
-    // Current SSBO index
-    uint index = 1024 * gl_GlobalInvocationID.y + gl_GlobalInvocationID.x;
-	index =  gl_GlobalInvocationID.x;
-	// Don't try to write beyond particle count
-    //if (index >= ubo.particleCount) 
-		//return;	
-
-    // Read position and velocity
+	  // Read position and velocity
     vec3 vVel = particles[index].vel.xyz;
     vec3 vPos = particles[index].pos.xyz;
 
 	//Explosion
-	if(ubo.time > 2)
+	if(ubo.time > particles[index].gradientPos.z+1.575)
 	{
-		vec3 delta = vPos + (vVel*ubo.deltaT/100);
+		vec3 delta = vPos + (vVel*ubo.deltaT);
 		particles[index].pos.xyz = delta;
 		particles[index].vel.xyz *= 0.98;
 		
 		if(ubo.time > 1)
-			particles[index].vel.xyz -= vec3(0, 3.9, 0);
+			particles[index].vel.xyz -= vec3(0, ubo.deltaT, 0);
 		
 		particles[index].lifeTimer.x += ubo.deltaT;
-		if(particles[index].lifeTimer.x > particles[index].lifeTimer.y)
+		if(particles[index].lifeTimer.x > particles[index].lifeTimer.y*2)
 		{
 			particles[index].pos = vec4(1000, 0, 0, 0);
 			particles[index].lifeTimer.x = 0;
 		}
 	}
-	else if(ubo.time > 1.975)
+	else if(ubo.time > particles[index].gradientPos.z+1.55)
 	{
 		particles[index].lifeTimer.x = 0;
-		particles[index].lifeTimer.y = particles[index].lifeTimer.y*1.5;
-		particles[index].vel = particles[index].startvel;
+		//particles[index].lifeTimer.y = particles[index].lifeTimer.y*1.5;
+		particles[index].vel = particles[index].startvel*3;
 		particles[index].pos = particles[index].rootPos;
 	}
 
 	
 	//Trail
-	vVel = vec3(particles[index].lifeTimer.z, -abs(particles[index].vel.y), particles[index].lifeTimer.a);
-	if(ubo.time > 0.025 && ubo.time < 1.95)
+	vVel = vec3(particles[index].lifeTimer.z/2, -abs(particles[index].vel.y), particles[index].lifeTimer.a/2);
+	if(ubo.time > particles[index].gradientPos.z + 0.025 && ubo.time < particles[index].gradientPos.z +1.55f)
 	{
-		particles[index].rootPos.xyz += vec3(0,2,0)*ubo.deltaT;
-		vec3 delta = vPos + (vVel*ubo.deltaT/100);
+		particles[index].rootPos.xyz += vec3(0,3,0)*ubo.deltaT;
+		vec3 delta = vPos + (vVel*ubo.deltaT);
 		particles[index].pos.xyz = delta;
-		//particles[index].vel.xyz *= 0.98;
-		
-		//if(ubo.time > 1)
-			//particles[index].vel.xyz -= vec3(0, 3.9, 0);
 		
 		particles[index].lifeTimer.x += ubo.deltaT;
 		if(particles[index].lifeTimer.x > particles[index].lifeTimer.y)
@@ -105,11 +91,229 @@ void main()
 			particles[index].lifeTimer.x = 0;
 		}
 	}
-	else if(ubo.time < 0.025)
+	else if(ubo.time < particles[index].gradientPos.z)
 	{
-		particles[index].rootPos = vec4(0, -5, 0, 0);
+		particles[index].rootPos = particles[index].startpos;
+
+	}
+}
+
+bool Approx (vec3 A, vec3 B) 
+{
+	float EPSILON = 0.001f;
+   vec3 diff = A - B;
+   return (diff.x < EPSILON) && (-diff.x < EPSILON) && (diff.y < EPSILON) && (-diff.y < EPSILON)&& (diff.z < EPSILON) && (-diff.z < EPSILON);
+}
+void Roman(uint index)
+{
+	  vec3 vVel = particles[index].vel.xyz;
+    vec3 vPos = particles[index].pos.xyz;
+	if(ubo.pulseTime > 0.5f)
+	{
+		particles[index].gradientPos.y = 1;
+		vec3 delta = vPos + (vVel*ubo.deltaT);
+		particles[index].pos.xyz = delta;
+
+		particles[index].vel.xyz -= vec3(0, ubo.deltaT , 0);
+		particles[index].vel.xyz *= 0.98;
+		
+		particles[index].lifeTimer.x += ubo.deltaT;
+		if(particles[index].lifeTimer.x > particles[index].lifeTimer.y)
+		{
+			particles[index].pos = particles[index].rootPos;
+			particles[index].lifeTimer.x = 0;
+			particles[index].vel.xyz = vec3(particles[index].lifeTimer.z, abs(particles[index].startvel.y), particles[index].lifeTimer.a);
+		}
+	}
+	else
+	{
+		if(!Approx(particles[index].pos.xyz, particles[index].rootPos.xyz))
+		{
+			vec3 delta = vPos + (vVel*ubo.deltaT);
+			particles[index].pos.xyz = delta;
+
+			particles[index].vel.xyz -= vec3(0, ubo.deltaT *2, 0);
+		}
+		particles[index].lifeTimer.x += ubo.deltaT;
+		if(particles[index].lifeTimer.x > particles[index].lifeTimer.y)
+		{
+			particles[index].pos = particles[index].rootPos;
+			//particles[index].lifeTimer.x = 0;
+			particles[index].vel.xyz = vec3(0, 0, 0);//vec3(particles[index].lifeTimer.z*2, abs(particles[index].startvel.y), particles[index].lifeTimer.a*2);
+		}
+	}
+}
+
+void Catherine(uint index)
+{
+	vec3 vVel = particles[index].vel.xyz;
+    vec3 vPos = particles[index].pos.xyz;
+	if(ubo.time > particles[index].gradientPos.z || particles[index].gradientPos.y > 0)
+	{
+		particles[index].gradientPos.y = 1;
+		float s = sin(ubo.deltaT*8);
+		float c = cos(ubo.deltaT*8);
+		
+		particles[index].rootPos.xy -= particles[index].startpos.xy;
+		
+		float xnew = particles[index].rootPos.x * c - particles[index].rootPos.y * s;
+		float ynew = particles[index].rootPos.x * s + particles[index].rootPos.y * c;
+		
+		vec2 newPos = vec2(xnew, ynew) + particles[index].startpos.xy;
+		
+		
+		vec2 vDir = normalize((particles[index].rootPos.xy+particles[index].startpos.xy) - newPos);
+		particles[index].rootPos.xy = newPos;
+		
+		
+		
+		vec3 delta = vPos + (vVel*ubo.deltaT);
+		particles[index].pos.xyz = delta;
+
+		particles[index].vel.xyz -= vec3(0, ubo.deltaT/2 , 0);
+		particles[index].vel.xyz *= 0.98;
+		
+		particles[index].lifeTimer.x += ubo.deltaT;
+		if(particles[index].lifeTimer.x > particles[index].lifeTimer.y)
+		{
+			particles[index].pos = particles[index].rootPos;
+			particles[index].lifeTimer.x = 0;
+			particles[index].vel.xyz = vec3(particles[index].lifeTimer.z, abs(particles[index].startvel.y), particles[index].lifeTimer.a);
+			particles[index].vel.xy += vDir*2;
+		}
+	}
+}
+
+void Fountain(uint index)
+{
+	  vec3 vVel = particles[index].vel.xyz;
+    vec3 vPos = particles[index].pos.xyz;
+	if(ubo.time > particles[index].gradientPos.z || particles[index].gradientPos.y > 0)
+	{
+		particles[index].gradientPos.y = 1;
+		vec3 delta = vPos + (vVel*ubo.deltaT);
+		particles[index].pos.xyz = delta;
+
+		particles[index].vel.xyz -= vec3(0, ubo.deltaT , 0);
+		particles[index].vel.xyz *= 0.98;
+		
+		particles[index].lifeTimer.x += ubo.deltaT;
+		if(particles[index].lifeTimer.x > particles[index].lifeTimer.y)
+		{
+			particles[index].pos = particles[index].rootPos;
+			particles[index].lifeTimer.x = 0;
+			particles[index].vel.xyz = vec3(particles[index].lifeTimer.z*2, abs(particles[index].startvel.y), particles[index].lifeTimer.a*2);
+		}
+	}
+	else if(ubo.time < particles[index].gradientPos.z)
+	{
+		 if(particles[index].vel.y > -0.01 && particles[index].vel.y < 0.01)
+		 {
+			 vec3 delta = vPos + (vVel*ubo.deltaT);
+			 particles[index].pos.xyz = delta;
+
+			 particles[index].vel.xyz -= vec3(0, ubo.deltaT *2, 0);
+		 }
+		 particles[index].lifeTimer.x += ubo.deltaT;
+		 if(particles[index].lifeTimer.x > particles[index].lifeTimer.y)
+		 {
+			 particles[index].pos = particles[index].rootPos;
+			 particles[index].lifeTimer.x = 0;
+			 particles[index].vel.xyz = vec3(0, 0, 0);//vec3(particles[index].lifeTimer.z*2, abs(particles[index].startvel.y), particles[index].lifeTimer.a*2);
+		 }
+		
+		particles[index].pos = particles[index].rootPos;
 	}
 
-	//particles[index].pos = vec4(0, 2.5, 0, 0);
+}
 
+void Flat(uint index)
+{
+	  // Read position and velocity
+    vec3 vVel = particles[index].vel.xyz;
+    vec3 vPos = particles[index].pos.xyz;
+
+	//Explosion
+	if(ubo.time > particles[index].gradientPos.z+1.575)
+	{
+		vec3 delta = vPos + (vVel*ubo.deltaT);
+		particles[index].pos.xyz = delta;
+		particles[index].vel.xyz *= 0.985;
+		
+		float dist = pow(length(particles[index].pos.xz - particles[index].rootPos.xz)/3,2);
+		if(ubo.time > 1)
+			particles[index].vel.xyz -= vec3(0, ubo.deltaT*dist, 0);
+		
+		particles[index].lifeTimer.x += ubo.deltaT;
+		if(particles[index].lifeTimer.x > particles[index].lifeTimer.y*2)
+		{
+			particles[index].pos = vec4(1000, 0, 0, 0);
+			particles[index].lifeTimer.x = 0;
+		}
+	}
+	else if(ubo.time > particles[index].gradientPos.z+1.55)
+	{
+		particles[index].lifeTimer.x = 0;
+		//particles[index].lifeTimer.y = particles[index].lifeTimer.y*1.5;
+		particles[index].vel = particles[index].startvel*3;
+		particles[index].vel.y = 0;
+		particles[index].pos = particles[index].rootPos;
+	}
+
+	
+	//Trail
+	vVel = vec3(particles[index].lifeTimer.z/2, -abs(particles[index].vel.y), particles[index].lifeTimer.a/2);
+	if(ubo.time > particles[index].gradientPos.z + 0.025 && ubo.time < particles[index].gradientPos.z +1.55f)
+	{
+		particles[index].rootPos.xyz += vec3(0,3,0)*ubo.deltaT;
+		vec3 delta = vPos + (vVel*ubo.deltaT);
+		particles[index].pos.xyz = delta;
+		
+		particles[index].lifeTimer.x += ubo.deltaT;
+		if(particles[index].lifeTimer.x > particles[index].lifeTimer.y)
+		{
+			particles[index].pos = particles[index].rootPos;
+			particles[index].lifeTimer.x = 0;
+		}
+	}
+	else if(ubo.time < particles[index].gradientPos.z)
+	{
+		particles[index].rootPos = particles[index].startpos;
+		particles[index].vel = particles[index].startvel;
+
+	}
+}
+
+void main() 
+{
+
+    // Current SSBO index
+    uint index = 1024 * gl_GlobalInvocationID.y + gl_GlobalInvocationID.x;
+	index =  gl_GlobalInvocationID.x;
+	// Don't try to write beyond particle count
+    if (index >= ubo.particleCount) 
+		return;	
+
+	if(particles[index].rootPos.a == 0)
+	{
+		Peony(index);
+	}
+	else if(particles[index].rootPos.a == 1)
+	{
+		Fountain(index);
+	}
+	else if(particles[index].rootPos.a == 2)
+	{
+		Catherine(index);
+	}
+	else if(particles[index].rootPos.a == 3)
+	{
+		Roman(index);
+	}
+	else if(particles[index].rootPos.a == 4)
+	{
+		Flat(index);
+	}
+	
+	//particles[index].gradientPos.x = particles[index].pos.x/2;
 }

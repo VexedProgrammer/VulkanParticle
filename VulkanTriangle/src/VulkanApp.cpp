@@ -30,7 +30,7 @@ static std::vector<char> readFile(const std::string& filename) {
 
 const void VulkanApp::initWindow()
 {
-	window = new GLFW_Window(512, 512, "Hello Pyramid"); //Open the GLFW window with a given size and name
+	window = new GLFW_Window(1280, 720, "Hello Pyramid"); //Open the GLFW window with a given size and name
 
 	glfwSetWindowUserPointer(window->Window(), this); //Set the window pointer to this class (VulkanApp)
 	glfwSetFramebufferSizeCallback(window->Window(), framebufferResizeCallback); //Set resize call back to given function
@@ -316,24 +316,14 @@ const void VulkanApp::cleanup() {
 
 	//Clean up descipter pool memory
 	vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+	
 
 	//Clean up layout memory
 	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
-	//Clean up shader buffers
-	/*for (size_t i = 0; i < swapChainImages.size(); i++) {
-		for (unsigned int j = 0; j < m_Objects.size(); j++)
-		{
-			unsigned int index = m_Objects.size() * i + j;
-			vkDestroyBuffer(device, uniformBuffers[index], nullptr);
-			vkFreeMemory(device, uniformBuffersMemory[index], nullptr);
-		}
-	}*/
+	vkDestroyDescriptorSetLayout(device, compute.descriptorSetLayout, nullptr);
 
-	/*for (unsigned int i = 0; m_Objects.size(); i++)
-	{
-		delete m_Objects[i];
-	}
-*/
+
+
 	vkDestroyRenderPass(device, renderPass, nullptr); //Clean up render pass data
 
 	//Clean up semaphore/sync objects
@@ -342,10 +332,35 @@ const void VulkanApp::cleanup() {
 		vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
 		vkDestroyFence(device, inFlightFences[i], nullptr);
 	}
+	vkDestroyBuffer(device, uniformBuffers[0], nullptr);
+	vkFreeMemory(device, uniformBuffersMemory[0], nullptr);
+	vkDestroyBuffer(device, compute.storageBuffer, nullptr);
+	vkFreeMemory(device, compute.storageMemory, nullptr);
+	vkDestroyBuffer(device, compute.uniformBuffer, nullptr);
+	vkFreeMemory(device, compute.uniformMemory, nullptr);
 
+	vkDestroyFence(device, compute.fence, nullptr);
 	//clean up command pools
 	vkDestroyCommandPool(device, commandPool, nullptr);
+	vkDestroyCommandPool(device, compute.commandPool, nullptr);
 
+	vkDestroyImageView(device, pTextureImageView, nullptr);
+	vkDestroyImage(device, pTextureImage, nullptr);
+	if (pTextureSampler)
+	{
+		vkDestroySampler(device, pTextureSampler, nullptr);
+	}
+	vkFreeMemory(device, pTextureImageMemory, nullptr);
+
+	vkDestroyImageView(device, gTextureImageView, nullptr);
+	vkDestroyImage(device, gTextureImage, nullptr);
+	if (gTextureSampler)
+	{
+		vkDestroySampler(device, gTextureSampler, nullptr);
+	}
+	vkFreeMemory(device, gTextureImageMemory, nullptr);
+
+	vkDestroyPipelineCache(device, pipelineCache, nullptr);
 	//Clean up device
 	vkDestroyDevice(device, nullptr);
 
@@ -1258,7 +1273,9 @@ void VulkanApp::cleanupSwapChain() {
 	//Destroy graphics pipline and layout
 	vkDestroyPipeline(device, graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-
+	vkDestroyPipeline(device, compute.pipeline, nullptr);
+	vkDestroyPipelineLayout(device, compute.pipelineLayout, nullptr);
+	
 	//Destroy all image views
 	for (size_t i = 0; i < swapChainImageViews.size(); i++) {
 		vkDestroyImageView(device, swapChainImageViews[i], nullptr);
@@ -1273,28 +1290,6 @@ void VulkanApp::cleanupSwapChain() {
 
 void VulkanApp::createDescriptorSetLayout()
 {
-	/*VkDescriptorSetLayoutBinding uboLayoutBinding = {};
-	uboLayoutBinding.binding = 0;
-	uboLayoutBinding.descriptorCount = 1;
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	uboLayoutBinding.pImmutableSamplers = nullptr;
-	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-	VkDescriptorSetLayoutBinding samplerLayoutBinding = {};
-	samplerLayoutBinding.binding = 1;
-	samplerLayoutBinding.descriptorCount = 1;
-	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	samplerLayoutBinding.pImmutableSamplers = nullptr;
-	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-	VkDescriptorSetLayoutBinding depthSamplerLayoutBinding = {};
-	depthSamplerLayoutBinding.binding = 2;
-	depthSamplerLayoutBinding.descriptorCount = 1;
-	depthSamplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	depthSamplerLayoutBinding.pImmutableSamplers = nullptr;
-	depthSamplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;*/
-	
-
 	VkDescriptorSetLayoutBinding uboLayoutBinding = {};
 	uboLayoutBinding.binding = 2;
 	uboLayoutBinding.descriptorCount = 1;
@@ -1314,7 +1309,6 @@ void VulkanApp::createDescriptorSetLayout()
 	gradient.pImmutableSamplers = nullptr;
 	gradient.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	//std::array<VkDescriptorSetLayoutBinding, 3> bindings = { uboLayoutBinding, samplerLayoutBinding, depthSamplerLayoutBinding };// guboLayoutBinding
 	std::array<VkDescriptorSetLayoutBinding, 3> bindings = { uboLayoutBinding, colour, gradient };
 	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -1331,13 +1325,6 @@ void VulkanApp::createUniformBuffers()
 {
 	//Get size of buffer
 	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
-
-	unsigned int size = 0;
-	/*for (unsigned int i = 0; i < m_Objects.size(); i++)
-	{
-		size += swapChainImages.size();
-	}*/
-
 	//Allocate memory
 	uniformBuffers.resize(1);
 	uniformBuffersMemory.resize(1);
@@ -1354,9 +1341,18 @@ void VulkanApp::updateUniformBuffer(uint32_t currentImage, unsigned int objectIn
 {
 	float x = 1;
 	float y = 0;
-	//theta += 1 * frameTimer;
-	float x_rotated = ((x - 0) * cos(theta)) - ((0 - y) * sin(theta)) + 0;
-	float y_rotated = ((0 - y) * cos(theta)) - ((x - 0) * sin(theta)) + 0;
+	//theta += 0.25f * frameTimer; //Uncomment this to have the camera orbit around 0,0,0
+	cameraPos -= glm::vec3(0, 0, 0);
+	float s = sin(theta);
+	float c = cos(theta);
+
+	float xnew = cameraPos.x * c - cameraPos.z * s;
+	float ynew = cameraPos.x * s + cameraPos.z * c;
+
+	
+
+	float x_rotated = ((cameraPos.x - 0) * cos(theta)) - ((0 - cameraPos.z) * sin(theta)) + 0;
+	float y_rotated = ((0 - cameraPos.z) * cos(theta)) - ((cameraPos.x - 0) * sin(theta)) + 0;
 	//Set up the uniform model matrix (rotation and translation and scale)
 	UniformBufferObject ubo = {};
 	ubo.model = glm::identity<glm::mat4>();
@@ -1364,7 +1360,7 @@ void VulkanApp::updateUniformBuffer(uint32_t currentImage, unsigned int objectIn
 	
 	
 	//View matrix using look at
-	ubo.view =  glm::lookAt(glm::vec3(x_rotated, 0.1f, 15), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	ubo.view =  glm::lookAt(glm::vec3(ynew, -5.01f, xnew), glm::vec3(0.0f, -0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	//Projection / Perspective matrix
 	glm::mat4 proj = glm::perspective(glm::radians(67.0f), (float)swapChainExtent.width / (float)swapChainExtent.height, 0.01f, 100.0f);
 	proj[1][1] *= -1;
@@ -1380,18 +1376,6 @@ void VulkanApp::updateUniformBuffer(uint32_t currentImage, unsigned int objectIn
 void VulkanApp::createDescriptorPool()
 {
 	unsigned int size = 0;
-	/*for (unsigned int i = 0; i < m_Objects.size(); i++)
-	{
-		size += swapChainImages.size();
-	}*/
-
-	/*std::array<VkDescriptorPoolSize, 3> poolSizes = {};
-	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = static_cast<uint32_t>(size*4);
-	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSizes[1].descriptorCount = static_cast<uint32_t>(size*4);
-	poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	poolSizes[2].descriptorCount = static_cast<uint32_t>(size * 4);*/
 
 	std::array<VkDescriptorPoolSize, 3> poolSizes = {};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1406,7 +1390,7 @@ void VulkanApp::createDescriptorPool()
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
-	poolInfo.maxSets = 2;// static_cast<uint32_t>(size * 4);
+	poolInfo.maxSets = 2;
 
 	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create descriptor pool!");
@@ -1435,7 +1419,7 @@ void VulkanApp::createDescriptorSets()
 	writeDescriptorSet.pImageInfo = &pDescriptor;
 	writeDescriptorSet.descriptorCount = 1;
 	writeDescriptorSets.push_back(writeDescriptorSet);
-	// Binding 1 : Particle gradient ramp
+	//Particle gradient ramp for mixing colours
 	VkWriteDescriptorSet writeDescriptorSetTwo{};
 	writeDescriptorSetTwo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 	writeDescriptorSetTwo.dstSet = descriptorSets[0];
@@ -1444,7 +1428,7 @@ void VulkanApp::createDescriptorSets()
 	writeDescriptorSetTwo.pImageInfo = &gDescriptor;
 	writeDescriptorSetTwo.descriptorCount = 1;
 	writeDescriptorSets.push_back(writeDescriptorSetTwo);
-	// Binding : UBO
+	//UBO
 	VkDescriptorBufferInfo bufferInfo = {};
 	bufferInfo.buffer = uniformBuffers[0]; //Actual buffer to use
 	bufferInfo.offset = 0; //Start at the start
@@ -1499,30 +1483,79 @@ VkFormat VulkanApp::findDepthFormat()
 
 void VulkanApp::prepareStorageBuffers()
 {
+	//We will need lots of random values for the diffrent fireworks
 	std::default_random_engine rndEngine(true ? 0 : (unsigned)time(nullptr));
-	std::uniform_real_distribution<float> rndDist(-0.001f, 0.001f);
+	std::uniform_real_distribution<float> rndDist(-1.0f, 1.0f);
 	std::uniform_real_distribution<float> rndDist01(0.2f, 1.0f);
 	std::uniform_real_distribution<float> rndDist10(-30.0f, 30.0f);
-	
-	// Initial particle positions
-	std::vector<Particle> particleBuffer(PARTICLE_COUNT);
-	for (auto& particle : particleBuffer) {
-		float r = rndDist01(rndEngine);
-		float r10 = rndDist10(rndEngine);
-		particle.pos =  glm::vec4(0, 15, 0, 0);
-		particle.vel = glm::normalize(glm::vec4(rndDist(rndEngine), rndDist(rndEngine), rndDist(rndEngine), 0))*(400*r);
-		particle.startvel = particle.vel;
-		particle.gradientPos.x = r;
-		particle.lifeTimer.y = r*1.5f;
-		particle.lifeTimer.z = r10;
-		particle.lifeTimer.a = r10;
-		particle.rootPos = glm::vec4(0, -5, 0, 0);
-	}
+	std::uniform_real_distribution<float> rndDist11(5.0f, 7.5f);
 
+	//FIREWORKS! (Type, index, position, life multiplyer, number of particles, start delay, max length in loop
+	m_ParticleSystems.push_back(ParticleSystem(FireWork::Flat, 0, glm::vec3(-12.5f, -5, 0), 2, 512, 1.0f, 3));
+	m_ParticleSystems.push_back(ParticleSystem(FireWork::Peony, 1, glm::vec3(-7.5f, -5, 0), 2, 512, 0.5f, 3));
+	m_ParticleSystems.push_back(ParticleSystem(FireWork::Peony, 2, glm::vec3(-2.5f, -5, 0), 2, 512, 0.025f, 3));
+	m_ParticleSystems.push_back(ParticleSystem(FireWork::Peony, 3, glm::vec3(2.5f, -5, 0), 2, 512, 0.025f, 3));
+	m_ParticleSystems.push_back(ParticleSystem(FireWork::Peony, 4, glm::vec3(7.5f, -5, 0), 2, 512, 0.5f, 3));
+	m_ParticleSystems.push_back(ParticleSystem(FireWork::Flat, 5, glm::vec3(12.5f, -5, 0), 2, 512, 1.0f, 3));
+
+	m_ParticleSystems.push_back(ParticleSystem(FireWork::Fountain, 6, glm::vec3(10, -7, 0), 5, 512,     1.0f,   3));
+	m_ParticleSystems.push_back(ParticleSystem(FireWork::Roman, 7, glm::vec3(5.0f, -7, 0), 3, 512,   0.5f,   3));
+	m_ParticleSystems.push_back(ParticleSystem(FireWork::Fountain, 8, glm::vec3(0, -7, 0), 5, 512,      0.025f, 3));
+	m_ParticleSystems.push_back(ParticleSystem(FireWork::Roman, 9, glm::vec3(-5.0f, -7, 0), 3, 512,  0.5f,   3));
+	m_ParticleSystems.push_back(ParticleSystem(FireWork::Fountain, 10, glm::vec3(-10.0f, -7, 0), 5, 512, 1.0f,   3));
+
+	m_ParticleSystems.push_back(ParticleSystem(FireWork::Catherine, 11, glm::vec3(10    , -7,  0),   1.5f, 512, 1.0f, 3));
+	m_ParticleSystems.push_back(ParticleSystem(FireWork::Catherine, 12, glm::vec3(5.0f, -7, 0), 1.5f, 512, 0.5f, 3));
+	m_ParticleSystems.push_back(ParticleSystem(FireWork::Catherine, 13, glm::vec3(0, -7, 0), 1.5f, 512, 0.025f, 3));
+	m_ParticleSystems.push_back(ParticleSystem(FireWork::Catherine, 14, glm::vec3(-5.0f, -7, 0), 1.5f, 512, 0.5f, 3));
+	m_ParticleSystems.push_back(ParticleSystem(FireWork::Catherine, 15, glm::vec3(-10.0f, -7, 0), 1.5f, 512, 1.0f, 3));
+
+	std::vector<Particle> particleBuffer(PARTICLE_COUNT);
+	unsigned int particleIndex = 0;
+	for (ParticleSystem& system : m_ParticleSystems)
+	{
+		for (unsigned int i = 0; i < system.particleCount; i++)
+		{
+			float r = rndDist01(rndEngine);
+
+			Particle& particle = particleBuffer[particleIndex];
+			particle.vel = glm::normalize(glm::vec4(rndDist(rndEngine), rndDist(rndEngine), rndDist(rndEngine), 0))*r;
+			particle.startvel = particle.vel;
+			particle.gradientPos.x = (float)system.id / m_ParticleSystems.size() + rndDist(rndEngine) / 10;
+			particle.lifeTimer.z = rndDist(rndEngine) / 3;
+			particle.lifeTimer.a = rndDist(rndEngine) / 3;
+
+			particle.lifeTimer.y = r * system.particleLife;
+			particle.lifeTimer.x = rndDist01(rndEngine) * system.particleLife;
+			particle.rootPos = glm::vec4(system.position, system.type);
+			particle.pos = particle.rootPos;
+			particle.startpos = particle.rootPos;
+
+			particle.gradientPos.z = system.startDelay;
+			particle.gradientPos.a = system.endTime;
+
+			if (system.type == FireWork::Fountain)
+			{
+				particle.vel.y = rndDist11(rndEngine);
+				particle.startvel = particle.vel;
+			}
+			else if (system.type == FireWork::Catherine)
+			{
+				particle.rootPos += glm::vec4(0, 0.25f, 0, 0);
+			}
+			else if (system.type == FireWork::Roman)
+			{
+				particle.vel.y = rndDist11(rndEngine);
+				particle.startvel = particle.vel;
+			}
+
+			particleIndex++;
+		}
+	}
 	VkDeviceSize storageBufferSize = particleBuffer.size() * sizeof(Particle);
 
-	// Staging
-	// SSBO won't be changed on the host after upload so copy to device local memory 
+	//Staging
+	//SSBO won't be changed on the host after upload so copy to device local memory 
 
 	VkBuffer stagingBuffer;
 	VkDeviceMemory stagingMemory;
@@ -1538,7 +1571,7 @@ void VulkanApp::prepareStorageBuffers()
 	
 
 	m_Engine->createBuffer(
-		// The SSBO will be used as a storage buffer for the compute pipeline and as a vertex buffer in the graphics pipeline
+		//The SSBO will be used as a storage buffer for the compute pipeline and as a vertex buffer in the graphics pipeline
 		storageBufferSize,
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -1548,7 +1581,7 @@ void VulkanApp::prepareStorageBuffers()
 
 
 
-	// Copy to staging buffer
+	//Copy to staging buffer
 	VkCommandBuffer copyCmd;
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo{};
 	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -1558,13 +1591,11 @@ void VulkanApp::prepareStorageBuffers()
 	
 	vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &copyCmd);
 
-	// If requested, also start recording for the new command buffer
-	if (true)
-	{
-		VkCommandBufferBeginInfo cmdBufferBeginInfo{};
-		cmdBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		vkBeginCommandBuffer(copyCmd, &cmdBufferBeginInfo);
-	}
+	//Start recording commandBuffer commands
+	VkCommandBufferBeginInfo cmdBufferBeginInfo{};
+	cmdBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	vkBeginCommandBuffer(copyCmd, &cmdBufferBeginInfo);
+
 
 	VkBufferCopy copyRegion = {};
 	copyRegion.size = storageBufferSize;
@@ -1574,7 +1605,7 @@ void VulkanApp::prepareStorageBuffers()
 	vkDestroyBuffer(device, stagingBuffer, nullptr);
 	vkFreeMemory(device, stagingMemory, nullptr);
 
-	// Binding description
+	//Binding description
 	vertices.bindingDescriptions.resize(1);
 	VkVertexInputBindingDescription vInputBindDescription{};
 	vInputBindDescription.binding = 0;
@@ -1584,10 +1615,9 @@ void VulkanApp::prepareStorageBuffers()
 		
 	
 
-	// Attribute descriptions
-	// Describes memory layout and shader positions
+	//Attribute descriptions
 	vertices.attributeDescriptions.resize(2);
-	// Location 0 : Position
+	//Position
 	VkVertexInputAttributeDescription vInputAttribDescription{};
 	vInputAttribDescription.location = 0;
 	vInputAttribDescription.binding = 0;
@@ -1600,11 +1630,11 @@ void VulkanApp::prepareStorageBuffers()
 	vInputAttribDescriptionTwo.binding = 0;
 	vInputAttribDescriptionTwo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
 	vInputAttribDescriptionTwo.offset = offsetof(Particle, gradientPos);
-	// Location 1 : Gradient position
+	//Gradient position
 	vertices.attributeDescriptions[1] = vInputAttribDescriptionTwo;
 	
 
-	// Assign to vertex buffer
+	//Assign to vertex buffer
 	VkPipelineVertexInputStateCreateInfo pipelineVertexInputStateCreateInfo{};
 	pipelineVertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 	vertices.inputState = pipelineVertexInputStateCreateInfo;
@@ -1628,16 +1658,16 @@ void VulkanApp::flushCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue,
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &commandBuffer;
 
-	// Create fence to ensure that the command buffer has finished executing
+	//Create fence to ensure that the command buffer has finished executing before next compute step
 	VkFenceCreateInfo fenceInfo{};
 	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	fenceInfo.flags = 0;
 	VkFence fence;
 	vkCreateFence(device, &fenceInfo, nullptr, &fence);
 
-	// Submit to the queue
+	//Submit to the queue
 	vkQueueSubmit(queue, 1, &submitInfo, fence);
-	// Wait for the fence to signal that command buffer has finished executing
+	//Wait for the fence
 	vkWaitForFences(device, 1, &fence, VK_TRUE, 100000000000);
 
 	vkDestroyFence(device, fence, nullptr);
@@ -1650,14 +1680,10 @@ void VulkanApp::flushCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue,
 
 void VulkanApp::prepareCompute()
 {
-	// Create a compute capable device queue
-		// The VulkanDevice::createLogicalDevice functions finds a compute capable queue and prefers queue families that only support compute
-		// Depending on the implementation this may result in different queue family indices for graphics and computes,
-		// requiring proper synchronization (see the memory barriers in buildComputeCommandBuffer)
+	//Create a compute capable device queue
 	vkGetDeviceQueue(device, computeFamily, 0, &compute.queue);
 
-	// Create compute pipeline
-	// Compute pipelines are created separate from graphics pipelines even if they use the same queue (family index)
+	//Create compute pipeline seperate from the graphics pipeline
 
 	VkDescriptorSetLayoutBinding setLayoutBinding{};
 	setLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -1723,7 +1749,7 @@ void VulkanApp::prepareCompute()
 
 	vkUpdateDescriptorSets(device, static_cast<uint32_t>(computeWriteDescriptorSets.size()), computeWriteDescriptorSets.data(), 0, NULL);
 
-	// Create pipeline	
+	//Create pipeline	
 	VkComputePipelineCreateInfo computePipelineCreateInfo{};
 	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
 	computePipelineCreateInfo.layout = compute.pipelineLayout;
@@ -1731,27 +1757,26 @@ void VulkanApp::prepareCompute()
 
 
 	auto compShaderCode = readFile("shaders/comp.spv");
-	//Set up shader modules for both vertex and fragment shaders
+	//Set up shader modules for both compute shader
 	VkShaderModule compShaderModule = createShaderModule(compShaderCode);
 	VkPipelineShaderStageCreateInfo shaderStage = {};
 	shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 	shaderStage.pName = "main"; 
 	shaderStage.module = compShaderModule;
+	
 	//Set up vertex info
-
-
 	computePipelineCreateInfo.stage = shaderStage;
 	vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &compute.pipeline);
 
-	// Separate command pool as queue family for compute may be different than graphics
+	//Separate command pool for compute
 	VkCommandPoolCreateInfo cmdPoolInfo = {};
 	cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	cmdPoolInfo.queueFamilyIndex = computeFamily;
 	cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &compute.commandPool);
 
-	// Create a command buffer for compute operations
+	//Command buffer for compute operations
 	VkCommandBufferAllocateInfo cmdBufAllocateInfo{};
 	cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	cmdBufAllocateInfo.commandPool = compute.commandPool;
@@ -1760,14 +1785,15 @@ void VulkanApp::prepareCompute()
 
 	vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &compute.commandBuffer);
 
-	// Fence for compute CB sync
+	//Fence for compute sync
 	VkFenceCreateInfo fenceCreateInfo{};
 	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 	vkCreateFence(device, &fenceCreateInfo, nullptr, &compute.fence);
 
-	// Build a single command buffer containing the compute dispatch commands
+	//Build a command buffer containing the compute dispatch commands
 	buildComputeCommandBuffer();
+	vkDestroyShaderModule(device, compShaderModule, nullptr);
 }
 
 void VulkanApp::buildComputeCommandBuffer()
@@ -1776,9 +1802,9 @@ void VulkanApp::buildComputeCommandBuffer()
 	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	vkBeginCommandBuffer(compute.commandBuffer, &cmdBufInfo);
 
-	// Compute particle movement
+	//Compute particle movement
 
-	// Add memory barrier to ensure that the (graphics) vertex shader has fetched attributes before compute starts to write to the buffer
+	//Ensure that the (graphics) vertex shader has fetched attributes before compute starts to write to the buffer
 	VkBufferMemoryBarrier bufferBarrier{};
 	bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
 	bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -1786,14 +1812,14 @@ void VulkanApp::buildComputeCommandBuffer()
 
 	bufferBarrier.buffer = compute.storageBuffer;
 	bufferBarrier.size = compute.storageDesc.range;
-	bufferBarrier.srcAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;						// Vertex shader invocations have finished reading from the buffer
-	bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader wants to write to the buffer
-	// Compute and graphics queue may have different queue families (see VulkanDevice::createLogicalDevice)
-	// For the barrier to work across different queues, we need to set their family indices
+	bufferBarrier.srcAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;						//Vertex shader has finished reading from the buffer
+	bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								//Compute shader wants to write to the buffer
 
+	//Compute and graphics queue may have different queue families
+	//For the barrier to work across different queues, we need to set their family indices
 	QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
-	bufferBarrier.srcQueueFamilyIndex = indices.graphicsFamily.value();			// Required as compute and graphics queue may have different families
-	bufferBarrier.dstQueueFamilyIndex = computeFamily;			// Required as compute and graphics queue may have different families
+	bufferBarrier.srcQueueFamilyIndex = indices.graphicsFamily.value();		
+	bufferBarrier.dstQueueFamilyIndex = computeFamily;			
 
 	vkCmdPipelineBarrier(
 		compute.commandBuffer,
@@ -1810,16 +1836,16 @@ void VulkanApp::buildComputeCommandBuffer()
 	// Dispatch the compute job
 	vkCmdDispatch(compute.commandBuffer, (PARTICLE_COUNT / 256), 1, 1);
 
-	// Add memory barrier to ensure that compute shader has finished writing to the buffer
-	// Without this the (rendering) vertex shader may display incomplete results (partial data from last frame) 
-	bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader has finished writes to the buffer
-	bufferBarrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;						// Vertex shader invocations want to read from the buffer
+	//Ensure that compute shader has finished writing to the buffer
+	//Without this the vertex shader may display partial data from last frame
+	bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								//Compute shader has finished writing to the buffer
+	bufferBarrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;						//Vertex shader wants to read from the buffer
 	bufferBarrier.buffer = compute.storageBuffer;
 	bufferBarrier.size = compute.storageDesc.range;
-	// Compute and graphics queue may have different queue families (see VulkanDevice::createLogicalDevice)
-	// For the barrier to work across different queues, we need to set their family indices
-	bufferBarrier.srcQueueFamilyIndex = computeFamily;			// Required as compute and graphics queue may have different families
-	bufferBarrier.dstQueueFamilyIndex = indices.graphicsFamily.value();			// Required as compute and graphics queue may have different families
+	//Compute and graphics queue may have different queue families
+	//For the barrier to work across different queues, we need to set their family indices
+	bufferBarrier.srcQueueFamilyIndex = computeFamily;
+	bufferBarrier.dstQueueFamilyIndex = indices.graphicsFamily.value();	
 
 	vkCmdPipelineBarrier(
 		compute.commandBuffer,
@@ -1836,12 +1862,16 @@ void VulkanApp::buildComputeCommandBuffer()
 void VulkanApp::UpdateComputeUniform()
 {
 	timer += frameTimer;
-	if (timer > 10.0f) timer = 0.0f;
-	compute.ubo.deltaT = frameTimer * 2.5f;
-	compute.ubo.destX = sin(glm::radians(timer * 360.0f)) * 0.75f;
-	compute.ubo.destY = 0.0f;
-	compute.ubo.time = timer;
+	if (timer > 5.0f) timer = 0.0f; //The display will loop every 5 seconds
 
+	pulseTimer += frameTimer;
+	if (pulseTimer > 0.75f) pulseTimer = 0; //A pulse timer for every 0.75 seconds (for roman candle firework)
+
+	compute.ubo.deltaT = frameTimer * 2.5f;
+	compute.ubo.time = timer;
+	compute.ubo.pulseTime = pulseTimer;
+
+	//Map memory to the gpu
 	void* data;
 	vkMapMemory(device, compute.uniformMemory, 0, sizeof(compute.ubo), 0, &data);
 	memcpy(data, &compute.ubo, sizeof(compute.ubo));
